@@ -1,0 +1,42 @@
+﻿name: Testes automatizados
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin123
+          POSTGRES_DB: estoque
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Baixa o codigo do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configura o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instala as dependencias
+        working-directory: estoque-api
+        run: pip install -r requirements.txt
+
+      - name: Roda os testes
+        working-directory: estoque-api
+        env:
+          SECRET_KEY: chave-de-teste-do-github-actions
+          DATABASE_URL: postgresql://admin:admin123@localhost:5432/estoque
+        run: pytest
