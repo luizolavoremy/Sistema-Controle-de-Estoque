@@ -12,6 +12,10 @@ Isso e comprovado de duas formas:
 - Teste automatizado (tests/concurrency_test.py) que dispara duas requisicoes simultaneas de verdade usando asyncio.gather().
 - Endpoint de demonstracao (POST /demo/concurrency-test/{id}) e tela dedicada no frontend, que simulam duas "compras" simultaneas e mostram visualmente qual foi aprovada e qual foi bloqueada.
 
+### Demonstracao visual
+
+![Demonstracao do lock otimista bloqueando uma compra simultanea](docs/lock-otimista-demo.png)
+
 ## Arquitetura
 
 Projeto estoque/
@@ -20,17 +24,18 @@ Projeto estoque/
 
 ## Tecnologias
 
-Backend: FastAPI, SQLAlchemy, PostgreSQL (via Docker), JWT (autenticacao), bcrypt (hash de senha), pytest + pytest-asyncio (testes).
+Backend: FastAPI, SQLAlchemy, PostgreSQL (via Docker), JWT (autenticacao), bcrypt (hash de senha), pytest + pytest-asyncio (testes), GitHub Actions (integracao continua).
 
 Frontend: React, Vite.
 
 ## Funcionalidades
 
-- CRUD completo de produtos e categorias
+- CRUD completo de produtos e categorias (com soft delete de produto, preservando historico)
 - Autenticacao com JWT (cadastro e login)
 - Registro de movimentacoes de estoque (entrada/saida) com lock otimista
+- Validacao de dados em duas camadas (Pydantic + constraints no PostgreSQL)
 - Tratamento de erros consistente (404, 409, 422, etc.)
-- Testes automatizados, incluindo teste de concorrencia real
+- 14 testes automatizados, incluindo teste de concorrencia real, rodando automaticamente via GitHub Actions a cada push
 - Interface web completa: login, listagem, CRUD de produtos, movimentacao, e demonstracao visual do lock otimista
 
 ## Como rodar o backend
@@ -44,8 +49,9 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 
-Cria um arquivo .env com:
+Cria um arquivo .env dentro de estoque-api com:
 SECRET_KEY=sua-chave-secreta-aqui
+DATABASE_URL=postgresql://admin:admin123@localhost:5432/estoque
 
 uvicorn app.main:app --reload
 
@@ -65,6 +71,8 @@ A aplicacao estara em http://localhost:5173
 
 cd estoque-api
 pytest
+
+Os testes tambem rodam automaticamente a cada push, via GitHub Actions (veja a aba "Actions" do repositorio).
 
 ## Autor
 

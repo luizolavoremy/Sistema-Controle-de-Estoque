@@ -1,16 +1,40 @@
-# React + Vite
+﻿# Frontend - Sistema de Controle de Estoque
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interface web em React (com Vite) para o sistema de controle de estoque, consumindo a API FastAPI do diretorio `estoque-api`.
 
-Currently, two official plugins are available:
+## Funcionalidades
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Login e cadastro de usuario, com token JWT salvo no navegador
+- Listagem de produtos em tabela, com nome, preco, estoque e versao (lock otimista)
+- Criacao e edicao de produtos, com categoria selecionavel
+- Registro de movimentacao de estoque (entrada/saida), respeitando o lock otimista do backend
+- Tela de demonstracao: dispara duas "compras" simultaneas no mesmo produto e mostra visualmente qual foi aprovada e qual foi bloqueada pelo lock otimista
 
-## React Compiler
+## Estrutura
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+src/
+App.jsx componente principal, dono da lista de produtos
+api.js endereco base da API
+index.css estilos globais
+components/
+AuthForm.jsx login e cadastro
+ProductList.jsx tabela de produtos
+ProductForm.jsx criar/editar produto
+MovementForm.jsx movimentacao de estoque
+ConcurrencyDemo.jsx demonstracao do lock otimista
 
-## Expanding the ESLint configuration
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Como rodar
+
+Pre-requisito: o backend (`estoque-api`) precisa estar rodando em `http://localhost:8000` -- veja o README na raiz do projeto.
+
+```bash
+npm install
+npm run dev
+```
+
+A aplicacao abre em `http://localhost:5173`.
+
+## Tecnologias
+
+React, Vite, fetch API nativa (sem biblioteca de requisicao HTTP externa).
