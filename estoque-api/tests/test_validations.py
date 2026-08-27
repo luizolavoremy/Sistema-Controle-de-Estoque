@@ -237,3 +237,33 @@ async def test_delete_produto_com_historico_preserva_movimentacao(client):
     resposta_lista = await client.get("/products/")
     ids_na_lista = [p["id"] for p in resposta_lista.json()]
     assert produto["id"] not in ids_na_lista
+
+
+# ==========================================
+# 8. Produto com soft delete (is_active=False) nao pode ser movimentado
+# CORRECAO: revisao apontou que POST /movements nao verificava
+# is_active, permitindo movimentar um produto "apagado" via API direta,
+# mesmo ele ja nao aparecendo mais na listagem/frontend.
+# ==========================================
+@pytest.mark.asyncio
+async def test_movimentar_produto_desativado_falha(client):
+    token = await registrar_e_logar(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    produto = await criar_categoria_e_produto(client, headers, estoque=10)
+
+    # Apaga o produto (soft delete)
+    resposta_delete = await client.delete(f"/products/{produto['id']}", headers=headers)
+    assert resposta_delete.status_code == 200
+
+    # Tenta movimentar o produto ja desativado
+    resposta_mov = await client.post(
+        "/movements/",
+        json={
+            "product_id": produto["id"],
+            "type": "in",
+            "quantity": 5,
+            "version": produto["version"],
+        },
+        headers=headers,
+    )
+    assert resposta_mov.status_code == 404

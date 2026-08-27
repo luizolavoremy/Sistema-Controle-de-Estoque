@@ -1,4 +1,4 @@
-# Este é o arquivo mais importante do projeto: aqui a movimentação
+﻿# Este é o arquivo mais importante do projeto: aqui a movimentação
 # de estoque acontece de verdade, com o LOCK OTIMISTA implementado.
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,19 +18,27 @@ router = APIRouter(prefix="/movements", tags=["movements"])
 def create_movement(
     data: MovementCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # exige login
+    current_user: User = Depends(get_current_user),
 ):
     # ==========================================
-    # PASSO 1: o produto existe?
+    # PASSO 1: o produto existe E está ativo?
+    #
+    # CORREÇÃO: antes, essa checagem não considerava is_active --
+    # um produto "apagado" (soft delete) ainda podia ser movimentado
+    # por quem chamasse a API diretamente, mesmo já não aparecendo
+    # na listagem/frontend. Isso é uma consequência direta de termos
+    # implementado soft delete sem propagar a regra pra esse endpoint.
     # ==========================================
-    product = db.query(Product).filter(Product.id == data.product_id).first()
+    product = (
+        db.query(Product)
+        .filter(Product.id == data.product_id, Product.is_active == True)
+        .first()
+    )
     if product is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
     # ==========================================
     # PASSO 2: se for uma SAÍDA, tem estoque suficiente?
-    # (checar isso ANTES do lock evita mensagem de erro confusa
-    # pra quem só queria comprar mais do que existe)
     # ==========================================
     if data.type == MovementType.OUT and data.quantity > product.stock_quantity:
         raise HTTPException(
@@ -43,26 +51,23 @@ def create_movement(
     # ==========================================
     if data.type == MovementType.IN:
         new_quantity = product.stock_quantity + data.quantity
-    else:  # OUT
+    else:
         new_quantity = product.stock_quantity - data.quantity
 
     # ==========================================
-    # PASSO 4: O LOCK OTIMISTA DE VERDADE.
-    #
-    # Em vez de fazer "ler o produto -> depois escrever", que tem
-    # uma brecha de tempo entre os dois passos (é exatamente aí que
-    # a condição de corrida acontece), a gente faz um UPDATE que já
-    # INCLUI a checagem de versão na mesma operação atômica do banco:
-    #
-    #   "Atualiza o produto ... MAS SÓ SE a versão ainda for a que
-    #    a pessoa leu (data.version)"
-    #
-    # Isso é uma ÚNICA instrução pro banco -- não dá brecha de tempo
-    # pra outra requisição se meter no meio.
+    # PASSO 4: O LOCK OTIMISTA -- agora TAMBÉM exige is_active=True
+    # nessa mesma instrução atômica. Isso é uma segunda camada de
+    # proteção: mesmo que alguém desative o produto bem no meio do
+    # tempo entre o PASSO 1 e esse UPDATE, a condição aqui ainda
+    # bloqueia a movimentação.
     # ==========================================
     result = (
         db.query(Product)
-        .filter(Product.id == data.product_id, Product.version == data.version)
+        .filter(
+            Product.id == data.product_id,
+            Product.version == data.version,
+            Product.is_active == True,
+        )
         .update(
             {
                 "stock_quantity": new_quantity,
@@ -72,26 +77,20 @@ def create_movement(
         )
     )
 
-    # "result" é quantas linhas foram realmente alteradas.
-    # Se for 0, significa que a condição "id=X AND version=Y" não
-    # bateu com nenhuma linha -- ou seja, a versão já tinha mudado
-    # (outra pessoa mexeu no produto entre a hora que este usuário
-    # leu e a hora que ele mandou essa requisição).
     if result == 0:
-        db.rollback()  # desfaz qualquer coisa pendente nessa sessão
+        db.rollback()
         raise HTTPException(
-            status_code=409,  # 409 = Conflict, o código certo pra isso
-            detail="Este produto foi modificado por outra requisição. "
-                   "Recarregue os dados e tente novamente.",
+            status_code=409,
+            detail="Este produto foi modificado por outra requisição, ou "
+                   "foi desativado. Recarregue os dados e tente novamente.",
         )
 
     # ==========================================
-    # PASSO 5: se chegou até aqui, o UPDATE foi aceito.
-    # Agora registramos a movimentação no histórico.
+    # PASSO 5: registra a movimentação no histórico
     # ==========================================
     new_movement = Movement(
         product_id=data.product_id,
-        user_id=current_user.id,  # pega do token, não do que a pessoa mandou
+        user_id=current_user.id,
         type=data.type,
         quantity=data.quantity,
     )
