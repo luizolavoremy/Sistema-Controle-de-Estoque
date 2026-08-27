@@ -1,40 +1,53 @@
-# Testes básicos, só pra confirmar que a API está respondendo certo.
+﻿# Testes básicos, só pra confirmar que a API está respondendo certo.
 
+import time
 import pytest
 
 
-# Toda função de teste PRECISA começar com "test_" -- é assim
-# que o pytest reconhece o que é um teste e o que não é.
+async def registrar_e_logar(client) -> str:
+    # Função auxiliar: cria um usuário novo e faz login, devolvendo
+    # o token pronto pra usar em requisições protegidas.
+    email_unico = f"basico_{time.time()}@teste.com"
+
+    await client.post(
+        "/auth/register",
+        json={"name": "Usuario Basico", "email": email_unico, "password": "senha123"},
+    )
+
+    response_login = await client.post(
+        "/auth/login",
+        json={"email": email_unico, "password": "senha123"},
+    )
+    return response_login.json()["access_token"]
+
+
 @pytest.mark.asyncio
 async def test_rota_raiz_responde(client):
-    # "client" aqui é a fixture que criamos no conftest.py --
-    # o pytest "injeta" ela automaticamente, só por causa do nome
-    # do parâmetro bater com o nome da fixture.
     response = await client.get("/")
 
-    # assert = "eu afirmo que isso é verdade". Se não for,
-    # o teste falha e o pytest te mostra exatamente o que esperava
-    # vs o que recebeu.
     assert response.status_code == 200
     assert response.json()["status"] == "API rodando"
 
 
 @pytest.mark.asyncio
 async def test_criar_e_listar_categoria(client):
-    # Cria uma categoria com um nome único (timestamp no nome
-    # evita conflito se você rodar o teste várias vezes)
-    import time
+    # CORREÇÃO: /categories/ agora exige autenticação (item 2 da
+    # revisão), então esse teste precisa logar antes de criar.
+    token = await registrar_e_logar(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
     nome_unico = f"Categoria Teste {time.time()}"
 
     response_criar = await client.post(
         "/categories/",
         json={"name": nome_unico, "description": "Categoria de teste"},
+        headers=headers,
     )
     assert response_criar.status_code == 200
     categoria_criada = response_criar.json()
     assert categoria_criada["name"] == nome_unico
 
-    # Confere que ela aparece na listagem
+    # Listar continua ABERTO -- não precisa de token aqui
     response_listar = await client.get("/categories/")
     assert response_listar.status_code == 200
     nomes = [c["name"] for c in response_listar.json()]
