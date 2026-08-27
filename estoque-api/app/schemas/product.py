@@ -10,9 +10,6 @@ class ProductCreate(BaseModel):
     stock_quantity: int = 0
     category_id: int
 
-    # Validações novas: preço e estoque nunca podem ser negativos.
-    # Isso barra o dado ruim na "porta de entrada", antes mesmo
-    # de chegar no banco.
     @field_validator("price")
     @classmethod
     def preco_nao_pode_ser_negativo(cls, value: Decimal) -> Decimal:
@@ -57,6 +54,7 @@ class ProductOut(BaseModel):
     stock_quantity: int
     category_id: int
     version: int
+    is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
 
