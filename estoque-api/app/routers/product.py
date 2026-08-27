@@ -34,10 +34,6 @@ def create_product(
     return new_product
 
 
-# ==========================================
-# LISTAR -- agora só mostra produtos ATIVOS (is_active=True).
-# Produtos "apagados" (soft delete) não aparecem mais aqui.
-# ==========================================
 @router.get("/", response_model=list[ProductOut])
 def list_products(db: Session = Depends(get_db)):
     return db.query(Product).filter(Product.is_active == True).all()
@@ -72,9 +68,19 @@ def update_product(
     if produto_existe is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
+    # CORREÇÃO: adicionado is_active=True também na cláusula do UPDATE
+    # atômico -- fecha uma race condition sutil: se alguém desativar
+    # (soft delete) o produto BEM no meio do tempo entre a busca acima
+    # e este UPDATE, a versão continua igual (soft delete não muda
+    # version), então sem essa checagem aqui o UPDATE passaria mesmo
+    # assim. Agora essa mesma instrução atômica cobre os dois casos.
     result = (
         db.query(Product)
-        .filter(Product.id == product_id, Product.version == data.version)
+        .filter(
+            Product.id == product_id,
+            Product.version == data.version,
+            Product.is_active == True,
+        )
         .update(
             {
                 "name": data.name,
@@ -91,8 +97,8 @@ def update_product(
         db.rollback()
         raise HTTPException(
             status_code=409,
-            detail="Este produto foi modificado por outra requisição. "
-                   "Recarregue os dados e tente novamente.",
+            detail="Este produto foi modificado por outra requisição, ou "
+                   "foi desativado. Recarregue os dados e tente novamente.",
         )
 
     db.commit()
@@ -101,11 +107,6 @@ def update_product(
     return produto_existe
 
 
-# ==========================================
-# APAGAR -- agora é SOFT DELETE: marca is_active=False,
-# em vez de apagar a linha de verdade. Isso preserva o
-# histórico de movimentações ligado a esse produto.
-# ==========================================
 @router.delete("/{product_id}")
 def delete_product(
     product_id: int,

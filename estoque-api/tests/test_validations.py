@@ -267,3 +267,73 @@ async def test_movimentar_produto_desativado_falha(client):
         headers=headers,
     )
     assert resposta_mov.status_code == 404
+
+
+# ==========================================
+# 9. Regressao: PUT /products com versao desatualizada (stale version)
+# deve ser rejeitado com 409. Esse eh o teste especifico que faltava
+# pro bug original do lock otimista ausente no PUT -- nao precisa de
+# concorrencia real, so provar que uma versao errada eh recusada.
+# ==========================================
+@pytest.mark.asyncio
+async def test_put_produto_com_versao_desatualizada_falha(client):
+    token = await registrar_e_logar(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    produto = await criar_categoria_e_produto(client, headers)
+
+    # Primeira edicao, com a versao certa -- deve funcionar e
+    # avancar a versao do produto (0 -> 1)
+    primeira_edicao = await client.put(
+        f"/products/{produto['id']}",
+        json={
+            "name": "Nome Editado 1",
+            "description": None,
+            "price": 20.0,
+            "category_id": produto["category_id"],
+            "version": produto["version"],
+        },
+        headers=headers,
+    )
+    assert primeira_edicao.status_code == 200
+    assert primeira_edicao.json()["version"] == produto["version"] + 1
+
+    # Segunda tentativa, usando a MESMA versao antiga de novo --
+    # deve ser rejeitada, porque a versao real ja avancou
+    segunda_edicao = await client.put(
+        f"/products/{produto['id']}",
+        json={
+            "name": "Nome Editado 2",
+            "description": None,
+            "price": 30.0,
+            "category_id": produto["category_id"],
+            "version": produto["version"],  # versao antiga, de proposito
+        },
+        headers=headers,
+    )
+    assert segunda_edicao.status_code == 409
+
+
+# ==========================================
+# 10. Produto desativado (soft delete) nao pode ser editado via PUT
+# ==========================================
+@pytest.mark.asyncio
+async def test_put_produto_desativado_falha(client):
+    token = await registrar_e_logar(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    produto = await criar_categoria_e_produto(client, headers)
+
+    resposta_delete = await client.delete(f"/products/{produto['id']}", headers=headers)
+    assert resposta_delete.status_code == 200
+
+    resposta_put = await client.put(
+        f"/products/{produto['id']}",
+        json={
+            "name": "Tentativa Pos Delete",
+            "description": None,
+            "price": 15.0,
+            "category_id": produto["category_id"],
+            "version": produto["version"],
+        },
+        headers=headers,
+    )
+    assert resposta_put.status_code == 404
