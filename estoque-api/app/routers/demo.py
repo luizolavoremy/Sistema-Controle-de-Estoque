@@ -86,6 +86,18 @@ async def demo_concorrencia(
     if product is None:
         raise HTTPException(status_code=404, detail="Produto nao encontrado ou inativo")
 
+    # CORRECAO: com estoque 0, quantidade_por_tentativa cai no piso
+    # de max(1, ...) e as duas "compras" sao rejeitadas por estoque
+    # insuficiente -- nunca chegam a disputar o lock de versao. A
+    # demo fica com estoque_depois == estoque_antes e a explicacao
+    # fixa ("so UMA foi aceita") passa a ser falsa nesse caso. Como
+    # a demo so existe pra ilustrar o lock, exigimos estoque > 0.
+    if product.stock_quantity <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Produto precisa ter estoque para executar a demonstracao",
+        )
+
     versao_lida = product.version
     estoque_antes = product.stock_quantity
 

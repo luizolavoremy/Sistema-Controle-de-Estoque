@@ -5,10 +5,13 @@
 import { useState } from "react";
 import ProductForm from "./ProductForm";
 import MovementForm from "./MovementForm";
+import { API_URL } from "../api";
 
 function ProductList({ token, produtos, aoAtualizarProdutos }) {
   const [formularioAberto, setFormularioAberto] = useState(null);
   const [movimentandoProduto, setMovimentandoProduto] = useState(null);
+  const [apagando, setApagando] = useState(null); // id do produto sendo apagado, pra desabilitar o botao
+  const [erroExclusao, setErroExclusao] = useState("");
 
   function aoSalvarProduto() {
     setFormularioAberto(null);
@@ -18,6 +21,36 @@ function ProductList({ token, produtos, aoAtualizarProdutos }) {
   function aoSalvarMovimento() {
     setMovimentandoProduto(null);
     aoAtualizarProdutos();
+  }
+
+  // CORRECAO: o backend ja tem DELETE /products/{id} (soft delete),
+  // mas essa tela nunca chamava esse endpoint -- o README promete
+  // "CRUD completo" na interface e isso deixava faltando o D.
+  async function aoApagarProduto(produto) {
+    const confirmou = window.confirm(`Apagar o produto "${produto.name}"?`);
+    if (!confirmou) return;
+
+    setErroExclusao("");
+    setApagando(produto.id);
+
+    try {
+      const resposta = await fetch(`${API_URL}/products/${produto.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!resposta.ok) {
+        const dadosErro = await resposta.json();
+        setErroExclusao(dadosErro.detail || "Erro ao apagar produto");
+        return;
+      }
+
+      aoAtualizarProdutos();
+    } finally {
+      setApagando(null);
+    }
   }
 
   return (
@@ -45,6 +78,8 @@ function ProductList({ token, produtos, aoAtualizarProdutos }) {
         />
       )}
 
+      {erroExclusao && <p style={{ color: "red" }}>{erroExclusao}</p>}
+
       <table border="1" cellPadding="8" style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr>
@@ -68,6 +103,13 @@ function ProductList({ token, produtos, aoAtualizarProdutos }) {
                 <button onClick={() => setFormularioAberto(produto)}>Editar</button>
                 {" "}
                 <button onClick={() => setMovimentandoProduto(produto)}>Movimentar</button>
+                {" "}
+                <button
+                  onClick={() => aoApagarProduto(produto)}
+                  disabled={apagando === produto.id}
+                >
+                  {apagando === produto.id ? "Apagando..." : "Apagar"}
+                </button>
               </td>
             </tr>
           ))}
