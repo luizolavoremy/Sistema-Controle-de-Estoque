@@ -77,14 +77,16 @@ def create_movement(
     return new_movement
 
 
-# ==========================================
-# NOVO: lista movimentações, opcionalmente filtradas por produto.
-# Criado pra permitir que os testes provem de verdade que uma
-# movimentação foi (ou não foi) criada -- antes disso, não existia
-# nenhuma forma de consultar o histórico pela API.
-# ==========================================
+# CORREÇÃO: essa rota estava sem autenticação, expondo user_id de
+# qualquer movimentação pra qualquer pessoa sem login. Adicionado
+# Depends(get_current_user) -- não é sobre concorrência, é controle
+# de acesso: histórico de movimentação é dado sensível do negócio.
 @router.get("/", response_model=list[MovementOut])
-def list_movements(product_id: int | None = None, db: Session = Depends(get_db)):
+def list_movements(
+    product_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     query = db.query(Movement)
     if product_id is not None:
         query = query.filter(Movement.product_id == product_id)

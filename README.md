@@ -35,7 +35,7 @@ Frontend: React, Vite.
 - Registro de movimentacoes de estoque (entrada/saida) com lock otimista
 - Validacao de dados em duas camadas (Pydantic + constraints no PostgreSQL)
 - Tratamento de erros consistente (404, 409, 422, etc.)
-- 14 testes automatizados, incluindo teste de concorrencia real, rodando automaticamente via GitHub Actions a cada push
+- Suite automatizada cobrindo autenticacao, validacoes, soft delete e concorrencia real, executada automaticamente via GitHub Actions a cada push
 - Interface web completa: login, listagem, CRUD de produtos, movimentacao, e demonstracao visual do lock otimista
 
 ## Como rodar o backend

@@ -1,6 +1,6 @@
-# Este endpoint existe só pra DEMONSTRAÇÃO: ele dispara duas "compras"
-# simultâneas no mesmo produto e devolve um relatório mostrando o
-# lock otimista resolvendo o conflito, ao vivo, numa única resposta.
+﻿# Este endpoint existe so pra DEMONSTRACAO: ele dispara duas "compras"
+# simultaneas no mesmo produto e devolve um relatorio mostrando o
+# lock otimista resolvendo o conflito, ao vivo, numa unica resposta.
 
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,25 +17,32 @@ router = APIRouter(prefix="/demo", tags=["demo"])
 
 
 def _tentar_compra(product_id: int, quantity: int, version_lida: int, user_id: int) -> dict:
-    # Essa função roda numa THREAD separada (veja o run_in_threadpool
-    # mais abaixo). Por isso ela abre sua PRÓPRIA sessão com o banco,
-    # em vez de usar a sessão compartilhada da requisição principal --
-    # é assim que simulamos duas requisições realmente independentes.
     db: Session = SessionLocal()
     try:
-        product = db.query(Product).filter(Product.id == product_id).first()
+        # CORRECAO: adicionado is_active=True aqui tambem -- esse
+        # arquivo tem sua PROPRIA copia da logica de movimentacao
+        # (em vez de reusar a de /movements), entao a correcao de
+        # soft delete precisa ser aplicada aqui separadamente.
+        product = (
+            db.query(Product)
+            .filter(Product.id == product_id, Product.is_active == True)
+            .first()
+        )
         if product is None:
-            return {"sucesso": False, "detalhe": "Produto não encontrado"}
+            return {"sucesso": False, "detalhe": "Produto nao encontrado ou inativo"}
 
         if quantity > product.stock_quantity:
             return {"sucesso": False, "detalhe": "Estoque insuficiente"}
 
         new_quantity = product.stock_quantity - quantity
 
-        # O MESMO lock otimista que já usamos em /movements
         result = (
             db.query(Product)
-            .filter(Product.id == product_id, Product.version == version_lida)
+            .filter(
+                Product.id == product_id,
+                Product.version == version_lida,
+                Product.is_active == True,
+            )
             .update(
                 {"stock_quantity": new_quantity, "version": Product.version + 1},
                 synchronize_session=False,
@@ -47,7 +54,7 @@ def _tentar_compra(product_id: int, quantity: int, version_lida: int, user_id: i
             return {
                 "sucesso": False,
                 "detalhe": "Bloqueado pelo lock otimista -- outra "
-                           "'compra' já tinha alterado a versão do produto",
+                           "'compra' ja tinha alterado a versao do produto",
             }
 
         db.add(Movement(
@@ -69,19 +76,21 @@ async def demo_concorrencia(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    # CORRECAO: mesma checagem de is_active aplicada aqui na rota
+    # principal, nao so dentro do _tentar_compra.
+    product = (
+        db.query(Product)
+        .filter(Product.id == product_id, Product.is_active == True)
+        .first()
+    )
     if product is None:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
+        raise HTTPException(status_code=404, detail="Produto nao encontrado ou inativo")
 
     versao_lida = product.version
     estoque_antes = product.stock_quantity
 
-    # As DUAS "compras" tentam levar 60% do estoque cada uma --
-    # juntas, passam do total disponível, então uma delas TEM que falhar.
     quantidade_por_tentativa = max(1, int(estoque_antes * 0.6))
 
-    # Aqui está o "disparo simultâneo" de verdade: cada chamada roda
-    # numa thread própria, e o asyncio.gather espera as duas terminarem.
     resultado_1, resultado_2 = await asyncio.gather(
         run_in_threadpool(_tentar_compra, product_id, quantidade_por_tentativa, versao_lida, current_user.id),
         run_in_threadpool(_tentar_compra, product_id, quantidade_por_tentativa, versao_lida, current_user.id),
@@ -98,7 +107,7 @@ async def demo_concorrencia(
         "estoque_depois": product.stock_quantity,
         "explicacao": (
             "As duas compras tentaram descontar do estoque ao mesmo tempo, "
-            "usando a mesma versão lida. O lock otimista garantiu que só UMA "
+            "usando a mesma versao lida. O lock otimista garantiu que so UMA "
             "fosse aceita -- a outra foi bloqueada, evitando estoque negativo."
         ),
     }

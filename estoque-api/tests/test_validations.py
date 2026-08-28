@@ -64,7 +64,7 @@ async def test_estoque_insuficiente_nao_cria_movimentacao(client):
     # CORRECAO: alem de checar o estoque, confirma que NENHUMA
     # movimentacao foi criada de fato -- o teste antigo so provava
     # que o estoque ficou igual, nao que a movimentacao nao existiu.
-    resposta_movs = await client.get(f"/movements/?product_id={produto['id']}")
+    resposta_movs = await client.get(f"/movements/?product_id={produto['id']}", headers=headers)
     assert resposta_movs.json() == []
 
 
@@ -224,7 +224,7 @@ async def test_delete_produto_com_historico_preserva_movimentacao(client):
     # confirma que a MOVIMENTACAO continua existindo no banco --
     # o teste antigo nunca provava isso de verdade, so que o produto
     # tinha sumido, que e uma coisa diferente do que o nome promete.
-    resposta_movs = await client.get(f"/movements/?product_id={produto['id']}")
+    resposta_movs = await client.get(f"/movements/?product_id={produto['id']}", headers=headers)
     ids_movimentacoes = [m["id"] for m in resposta_movs.json()]
     assert movimentacao_id in ids_movimentacoes
 
