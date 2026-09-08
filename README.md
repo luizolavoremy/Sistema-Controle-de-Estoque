@@ -76,4 +76,4 @@ Os testes tambem rodam automaticamente a cada push, via GitHub Actions (veja a a
 
 ## Autor
 
-Projeto desenvolvido como parte de um estudo prático de backend, autenticação e controle de concorrência, com auxílio do Claude na implementação, revisão de código e aprendizado de conceitos.
+Projeto desenvolvido como estudo prático de backend, autenticação e controle de concorrência. A implementação foi realizada com forte apoio de IA (Claude), que auxiliou na geração do código e na orientação das etapas de desenvolvimento. Meu foco durante o projeto foi acompanhar o processo, executar as implementações e estudar os conceitos envolvidos.
